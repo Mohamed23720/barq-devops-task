@@ -133,5 +133,17 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: Three separate typos in config/app.env: wrong last character in the database password, wrong postgres port (5433 instead of 5432), and wrong redis port (6380 instead of 6379).
 - Fix: Corrected the password and both ports in config/app.env to match the real values.
 - Retest evidence: After `docker compose -p barq-assessment up -d --force-recreate app-01 app-02`: POST /records successfully created a new record (id: 3), and GET /records returned it along with the pre-seeded records. GET /ready returned {"postgres":"ready","redis":"ready","status":"ready"} on a follow-up check a few seconds after recreation.
-- Related commit: (after commit)
+- Related commit: 8d7b753
+- Remaining uncertainty: None.
+
+## Entry 11 / 2026-09-13 / [الوقت الحالي بـ date -u] UTC
+- Symptom: A record created via POST /records (id: 3, "persistence test") disappeared after `docker compose down` followed by `docker compose up -d` (without --volumes), even though the named volume "postgres-data" was still present.
+- Hypothesis: The named volume might not be mounted at postgres's actual data directory.
+- Command or test: Created a record, ran `docker compose -p barq-assessment down` then `up -d`, waited for /ready to confirm postgres was ready, then checked GET /records. Also inspected postgres's volumes/tmpfs entries in docker-compose.yml.
+- Actual output: GET /records after restart returned only the two seed records (id 1, 2) — the created record (id 3) was gone. docker-compose.yml showed the named volume "postgres-data" mounted at /var/lib/postgresql/backup (wrong path), while the actual data directory /var/lib/postgresql/data was mounted as tmpfs (in-memory, wiped on container removal).
+- Failed attempt and what changed your thinking: Initial check right after `up -d` briefly returned "postgres_unavailable" on /ready and /records; this was a transient startup timing issue, not the persistence bug itself — confirmed by waiting 5s and rechecking /ready before concluding anything about persistence.
+- Root cause: The named volume was pointed at the wrong path (/var/lib/postgresql/backup) while the real data directory (/var/lib/postgresql/data) had no persistent storage at all (mounted as tmpfs), so all data was wiped whenever the container was removed.
+- Fix: Mounted postgres-data at /var/lib/postgresql/data and removed the tmpfs entry entirely.
+- Retest evidence: Repeated the full test sequence after the fix: created a new record (id: 3, "persistence test v2"), ran `docker compose -p barq-assessment down` then `up -d`, and GET /records confirmed all three records (including id: 3) survived the container recreation.
+- Related commit: (بعد commit)
 - Remaining uncertainty: None.
