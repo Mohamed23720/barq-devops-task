@@ -147,3 +147,15 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: Repeated the full test sequence after the fix: created a new record (id: 3, "persistence test v2"), ran `docker compose -p barq-assessment down` then `up -d`, and GET /records confirmed all three records (including id: 3) survived the container recreation.
 - Related commit: c6290f4
 - Remaining uncertainty: None.
+
+## Entry 12 / 2026-09-13 / 09:02 UTC
+- Symptom: N/A — this was a proactive check for a potential issue, not an observed failure.
+- Hypothesis: postgres/redis might have unnecessary host port mappings, violating the network isolation requirement.
+- Command or test: grep -A2 "postgres:" docker-compose.yml | grep ports; grep -A2 "redis:" docker-compose.yml | grep ports; docker port postgres; docker port redis; curl http://127.0.0.1:15432; curl http://127.0.0.1:16379
+- Actual output: No `ports:` entry found under either postgres or redis in docker-compose.yml. curl to both candidate host ports (15432, 16379) failed with "Failed to connect to server".
+- Failed attempt and what changed your thinking: None.
+- Root cause: N/A — postgres and redis were already correctly isolated from the host in this environment; no fix was required.
+- Fix: None needed.
+- Retest evidence: Confirmed via direct connection attempts (curl) that both ports are unreachable from outside Docker.
+- Related commit: N/A (no code change)
+- Remaining uncertainty: None.
