@@ -123,3 +123,15 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: After `docker compose -p barq-assessment up -d`, curl http://127.0.0.1:8080/ returns 200 with the welcome message. Looping curl on /instance 10 times shows both app-01 and app-02 alternating perfectly (5/5 split observed), confirming nginx load balancing now works correctly.
 - Related commit: fa6a689
 - Remaining uncertainty: None.
+
+## Entry 10 / 2026-09-13 / ~05:32 UTC
+- Symptom: POST/GET to /records returned {"error":"postgres_unavailable"} even though the postgres container itself was running and healthy.
+- Hypothesis: config/app.env's DATABASE_URL/REDIS_URL might not match the real credentials/ports used by postgres and redis.
+- Command or test: docker compose -p barq-assessment ps -a; docker logs app-01 --tail 20; cat config/app.env; grep -A5 "postgres:" docker-compose.yml | grep -E "POSTGRES_|ports"; grep -A3 "redis:" docker-compose.yml | grep -E "command|ports"
+- Actual output: postgres and redis containers were both "Up ... (healthy)". config/app.env had DATABASE_URL password ending in "d" and port 5433, while docker-compose.yml's real POSTGRES_PASSWORD ends in "c" and postgres's actual internal port is 5432. Similarly, REDIS_URL used port 6380 while redis's real internal port is 6379.
+- Failed attempt and what changed your thinking: Right after `--force-recreate`, GET /ready briefly reported postgres as "unavailable" even though the credentials were already corrected. Re-running the same check a few seconds later returned "ready" for both — this was a transient startup timing issue (postgres/app warm-up), not a second configuration problem. Confirmed this by checking /ready twice a few seconds apart.
+- Root cause: Three separate typos in config/app.env: wrong last character in the database password, wrong postgres port (5433 instead of 5432), and wrong redis port (6380 instead of 6379).
+- Fix: Corrected the password and both ports in config/app.env to match the real values.
+- Retest evidence: After `docker compose -p barq-assessment up -d --force-recreate app-01 app-02`: POST /records successfully created a new record (id: 3), and GET /records returned it along with the pre-seeded records. GET /ready returned {"postgres":"ready","redis":"ready","status":"ready"} on a follow-up check a few seconds after recreation.
+- Related commit: (after commit)
+- Remaining uncertainty: None.
