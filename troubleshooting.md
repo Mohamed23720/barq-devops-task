@@ -97,7 +97,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: docker-compose.yml published the host port to container port 81, but nginx only listens on port 80 inside its container, so no process was listening on the mapped port.
 - Fix: Changed the container-side port in the ports mapping from 81 to 80.
 - Retest evidence: After all three related fixes (Entry 7 port mapping, Entry 8 upstream typo, Entry 9 APP_HOST binding), curl to http://127.0.0.1:8080/ now returns a proper 200 response with the welcome message.
-- Related commit: (after commit)
+- Related commit: fa6a689
 - Remaining uncertainty: None regarding the port-mapping fix itself.
 
 ## Entry 8 / 2026-09-13 / ~04:21 UTC
@@ -109,7 +109,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: Typo in nginx.conf: app-01's upstream port (8081) didn't match the port the app actually listens on (8080).
 - Fix: Corrected app-01's upstream port from 8081 to 8080 in nginx.conf. Confirmed the corrected line is present both on disk and inside the running container (`docker exec nginx grep "app-01" /etc/nginx/nginx.conf`).
 - Retest evidence: After also fixing APP_HOST in Entry 9, curl to http://127.0.0.1:8080/ and /instance now succeed with 200 responses from both app-01 and app-02.
-- Related commit: (after commit)
+- Related commit: fa6a689
 - Remaining uncertainty: The 502 persists despite the corrected upstream port being confirmed live in the container. Root cause of this remaining 502 is not yet fully confirmed — still investigating (possible causes: nginx DNS caching of container IPs, or a separate issue with app-01/app-02 themselves).
 
 ## Entry 9 / 2026-09-13 / ~04:26 UTC
@@ -121,5 +121,5 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: APP_HOST was still set to "127.0.0.1" in docker-compose.yml, making both Flask apps bind only to loopback inside their own containers — actively refusing connections from nginx or any other container.
 - Fix: Changed APP_HOST to "0.0.0.0" in docker-compose.yml for both app services.
 - Retest evidence: After `docker compose -p barq-assessment up -d`, curl http://127.0.0.1:8080/ returns 200 with the welcome message. Looping curl on /instance 10 times shows both app-01 and app-02 alternating perfectly (5/5 split observed), confirming nginx load balancing now works correctly.
-- Related commit: (after commit)
+- Related commit: fa6a689
 - Remaining uncertainty: None.
