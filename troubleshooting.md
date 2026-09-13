@@ -171,3 +171,15 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: After removing backend from nginx's networks list and restarting, `docker exec nginx ping postgres` now fails with "bad address 'postgres'" (DNS resolution itself fails, confirming full network isolation — not just a blocked connection). curl to http://127.0.0.1:8080/ still returns 200 normally, confirming nginx's core function is unaffected.
 - Related commit: 79bd474
 - Remaining uncertainty: None.
+
+## Entry 14 / 2026-09-13 / 11:05 UTC
+- Symptom: N/A — this is a correction to Entry 12, not a new failure.
+- Hypothesis: Entry 12's grep command may have produced a false negative due to "postgres:" matching multiple lines (including the image name), with -A2 not reaching the actual ports line.
+- Command or test: grep -A8 "^  postgres:" docker-compose.yml; grep -A6 "^  redis:" docker-compose.yml (using ^ anchor to match only the service definition line, not substring matches elsewhere)
+- Actual output: Both postgres and redis DO have explicit `ports:` entries publishing 15432 and 16379 to 127.0.0.1 on the host. Entry 12's conclusion was incorrect due to a flawed grep pattern.
+- Failed attempt and what changed your thinking: Entry 12 concluded "no fix needed" based on a grep that silently failed to match due to ambiguous pattern matching, combined with a curl test that failed to connect — likely due to a Docker Desktop/WSL2 networking quirk with 127.0.0.1-bound ports, not actual isolation. Re-examining the raw file content (not relying on grep) revealed the ports were present all along.
+- Root cause: Unnecessary ports mappings for postgres and redis services, publishing them to the host despite the task's explicit requirement not to.
+- Fix: Removed both ports entries entirely.
+- Retest evidence: After removing the ports entries and recreating containers, `docker compose -p barq-assessment ps -a` shows postgres as "5432/tcp" and redis as "6379/tcp" with no host-port binding prefix — matching the pattern of already-isolated services like app-01/app-02, confirming no host exposure.
+- Related commit: (after commit)
+- Remaining uncertainty: None regarding this fix. Note for security_review.md: relying on "curl failed" as isolation evidence was a methodological mistake — the correct evidence is the absence of a `ports:` line in the config itself, verified by reading the raw file, not just testing connectivity from one specific environment.
