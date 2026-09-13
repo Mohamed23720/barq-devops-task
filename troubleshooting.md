@@ -169,5 +169,5 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: nginx service was explicitly attached to the backend network in addition to frontend, giving it a direct route to postgres/redis it doesn't need.
 - Fix: Removed backend from nginx's networks list — it now only has frontend.
 - Retest evidence: After removing backend from nginx's networks list and restarting, `docker exec nginx ping postgres` now fails with "bad address 'postgres'" (DNS resolution itself fails, confirming full network isolation — not just a blocked connection). curl to http://127.0.0.1:8080/ still returns 200 normally, confirming nginx's core function is unaffected.
-- Related commit: (after commit)
+- Related commit: 79bd474
 - Remaining uncertainty: None.
