@@ -159,3 +159,15 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: Confirmed via direct connection attempts (curl) that both ports are unreachable from outside Docker.
 - Related commit: N/A (no code change)
 - Remaining uncertainty: None.
+
+## Entry 13 / 2026-09-13 / 09:10 UTC
+- Symptom: N/A — proactive check for network isolation, not an observed failure in normal app usage.
+- Hypothesis: nginx might have a direct network path to the backend network where postgres/redis live, violating the isolation requirement.
+- Command or test: docker exec nginx sh -c "ping -c1 postgres || echo UNREACHABLE"; grep -A8 "^  nginx:" docker-compose.yml
+- Actual output: ping succeeded (0% packet loss, response from 172.19.0.5), confirming a live network path. docker-compose.yml showed nginx listed on both frontend and backend networks.
+- Failed attempt and what changed your thinking: None.
+- Root cause: nginx service was explicitly attached to the backend network in addition to frontend, giving it a direct route to postgres/redis it doesn't need.
+- Fix: Removed backend from nginx's networks list — it now only has frontend.
+- Retest evidence: After removing backend from nginx's networks list and restarting, `docker exec nginx ping postgres` now fails with "bad address 'postgres'" (DNS resolution itself fails, confirming full network isolation — not just a blocked connection). curl to http://127.0.0.1:8080/ still returns 200 normally, confirming nginx's core function is unaffected.
+- Related commit: (after commit)
+- Remaining uncertainty: None.
