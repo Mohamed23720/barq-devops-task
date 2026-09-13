@@ -136,7 +136,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Related commit: 8d7b753
 - Remaining uncertainty: None.
 
-## Entry 11 / 2026-09-13 / [الوقت الحالي بـ date -u] UTC
+## Entry 11 / 2026-09-13 / ~06:45 UTC
 - Symptom: A record created via POST /records (id: 3, "persistence test") disappeared after `docker compose down` followed by `docker compose up -d` (without --volumes), even though the named volume "postgres-data" was still present.
 - Hypothesis: The named volume might not be mounted at postgres's actual data directory.
 - Command or test: Created a record, ran `docker compose -p barq-assessment down` then `up -d`, waited for /ready to confirm postgres was ready, then checked GET /records. Also inspected postgres's volumes/tmpfs entries in docker-compose.yml.
@@ -145,5 +145,5 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: The named volume was pointed at the wrong path (/var/lib/postgresql/backup) while the real data directory (/var/lib/postgresql/data) had no persistent storage at all (mounted as tmpfs), so all data was wiped whenever the container was removed.
 - Fix: Mounted postgres-data at /var/lib/postgresql/data and removed the tmpfs entry entirely.
 - Retest evidence: Repeated the full test sequence after the fix: created a new record (id: 3, "persistence test v2"), ran `docker compose -p barq-assessment down` then `up -d`, and GET /records confirmed all three records (including id: 3) survived the container recreation.
-- Related commit: (بعد commit)
+- Related commit: c6290f4
 - Remaining uncertainty: None.
