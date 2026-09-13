@@ -85,5 +85,5 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: app-02's INSTANCE_ID was mistakenly set to "app-01" in docker-compose.yml (copy-paste error), giving both containers the same identity.
 - Fix: Changed app-02's INSTANCE_ID value in docker-compose.yml from "app-01" to "app-02".
 - Retest evidence: After rebuilding, `docker exec app-01 env | grep INSTANCE_ID` returns app-01, and `docker exec app-02 env | grep INSTANCE_ID` returns app-02 — each container now has its own distinct identity.
-- Related commit: will be added after commit
+- Related commit: d822af7
 - Remaining uncertainty: None.
