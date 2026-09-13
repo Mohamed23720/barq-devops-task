@@ -87,3 +87,39 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: After rebuilding, `docker exec app-01 env | grep INSTANCE_ID` returns app-01, and `docker exec app-02 env | grep INSTANCE_ID` returns app-02 — each container now has its own distinct identity.
 - Related commit: d822af7
 - Remaining uncertainty: None.
+
+## Entry 7 / 2026-09-13 / ~04:10 UTC
+- Symptom: curl to http://127.0.0.1:8080/records (and any endpoint) failed with "Recv failure: Connection reset by peer".
+- Hypothesis: The published host port might not match the port nginx actually listens on inside its container.
+- Command or test: grep -A5 "nginx:" docker-compose.yml | grep ports; grep "listen" nginx/nginx.conf
+- Actual output: docker-compose.yml mapped host port 8080 to container port 81, but nginx.conf showed nginx listens on port 80 inside the container — a mismatch.
+- Failed attempt and what changed your thinking: None — evidence was conclusive on first pass.
+- Root cause: docker-compose.yml published the host port to container port 81, but nginx only listens on port 80 inside its container, so no process was listening on the mapped port.
+- Fix: Changed the container-side port in the ports mapping from 81 to 80.
+- Retest evidence: After all three related fixes (Entry 7 port mapping, Entry 8 upstream typo, Entry 9 APP_HOST binding), curl to http://127.0.0.1:8080/ now returns a proper 200 response with the welcome message.
+- Related commit: (after commit)
+- Remaining uncertainty: None regarding the port-mapping fix itself.
+
+## Entry 8 / 2026-09-13 / ~04:21 UTC
+- Symptom: curl to http://127.0.0.1:8080/ returned "502 Bad Gateway" after fixing the port-mapping issue in Entry 7.
+- Hypothesis: One of the two app services might be listed with a wrong port in nginx's upstream block.
+- Command or test: docker logs nginx --tail 30; grep -A5 "upstream" nginx/nginx.conf
+- Actual output: nginx logs showed "connect() failed (111: Connection refused) while connecting to upstream... http://172.18.0.3:8081/". The upstream block in nginx.conf listed "server app-01:8081" while app-02 correctly used port 8080.
+- Failed attempt and what changed your thinking: None yet — evidence pointed clearly at the port typo, so applied the fix directly.
+- Root cause: Typo in nginx.conf: app-01's upstream port (8081) didn't match the port the app actually listens on (8080).
+- Fix: Corrected app-01's upstream port from 8081 to 8080 in nginx.conf. Confirmed the corrected line is present both on disk and inside the running container (`docker exec nginx grep "app-01" /etc/nginx/nginx.conf`).
+- Retest evidence: After also fixing APP_HOST in Entry 9, curl to http://127.0.0.1:8080/ and /instance now succeed with 200 responses from both app-01 and app-02.
+- Related commit: (after commit)
+- Remaining uncertainty: The 502 persists despite the corrected upstream port being confirmed live in the container. Root cause of this remaining 502 is not yet fully confirmed — still investigating (possible causes: nginx DNS caching of container IPs, or a separate issue with app-01/app-02 themselves).
+
+## Entry 9 / 2026-09-13 / ~04:26 UTC
+- Symptom: nginx logs showed "connect() failed (111: Connection refused)" when trying to reach both app-01 (172.18.0.3:8080) and app-02 (172.18.0.2:8080), even after correcting the upstream port typo in Entry 8.
+- Hypothesis: The apps might still be bound only to localhost inside their own containers, actively refusing connections from other containers like nginx.
+- Command or test: docker exec app-01 env | grep APP_HOST; docker exec app-02 env | grep APP_HOST
+- Actual output: Both containers returned APP_HOST=127.0.0.1.
+- Failed attempt and what changed your thinking: This APP_HOST issue was originally identified as a hypothesis back in the very first investigation step (6.1), but was never actually applied — investigation moved to the healthcheck issue instead and this fix was overlooked. The persistent 502s after fixing the nginx port typo (Entry 8) led back to re-checking this original hypothesis.
+- Root cause: APP_HOST was still set to "127.0.0.1" in docker-compose.yml, making both Flask apps bind only to loopback inside their own containers — actively refusing connections from nginx or any other container.
+- Fix: Changed APP_HOST to "0.0.0.0" in docker-compose.yml for both app services.
+- Retest evidence: After `docker compose -p barq-assessment up -d`, curl http://127.0.0.1:8080/ returns 200 with the welcome message. Looping curl on /instance 10 times shows both app-01 and app-02 alternating perfectly (5/5 split observed), confirming nginx load balancing now works correctly.
+- Related commit: (after commit)
+- Remaining uncertainty: None.
