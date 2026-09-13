@@ -181,5 +181,5 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: Unnecessary ports mappings for postgres and redis services, publishing them to the host despite the task's explicit requirement not to.
 - Fix: Removed both ports entries entirely.
 - Retest evidence: After removing the ports entries and recreating containers, `docker compose -p barq-assessment ps -a` shows postgres as "5432/tcp" and redis as "6379/tcp" with no host-port binding prefix — matching the pattern of already-isolated services like app-01/app-02, confirming no host exposure.
-- Related commit: (after commit)
+- Related commit: 7190abc
 - Remaining uncertainty: None regarding this fix. Note for security_review.md: relying on "curl failed" as isolation evidence was a methodological mistake — the correct evidence is the absence of a `ports:` line in the config itself, verified by reading the raw file, not just testing connectivity from one specific environment.
