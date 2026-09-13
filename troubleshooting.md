@@ -64,7 +64,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Related commit: cd34351
 - Remaining uncertainty: None.
 
-## Entry 5 / 2026-09-12 / ~20:52 UTC
+## Entry 5 / 2026-09-13 / ~03:50 UTC
 - Symptom: docker compose ps -a showed both app-01 and app-02 as "unhealthy" despite the app process running.
 - Hypothesis: The Docker healthcheck might be targeting a path that doesn't exist on the app.
 - Command or test: docker logs app-01/app-02 --tail 50; docker inspect app-01 --format '{{json .Config.Healthcheck}}'; manual test with docker exec app-01/app-02 python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8080/health').status)"
@@ -73,5 +73,17 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: The Docker healthcheck was configured to call /healthz, a path that doesn't exist on the app (the real route is /health), causing Docker to mark both containers unhealthy even though the app itself was working correctly.
 - Fix: Changed the healthcheck path in docker-compose.yml from /healthz to /health.
 - Retest evidence: After `docker compose -p barq-assessment up --build -d`, `docker compose -p barq-assessment ps -a` shows app-01 and app-02 both as "Up ... (healthy)".
-- Related commit: will be added after commit 
+- Related commit: ef9b48d
+- Remaining uncertainty: None.
+
+## Entry 6 / 2026-09-13 / ~04:06 UTC
+- Symptom: app-02's own logs showed "instance_id": "app-01" instead of "app-02" (confirmed also via `docker exec app-02 env | grep INSTANCE_ID` returning app-01).
+- Hypothesis: app-02's INSTANCE_ID environment variable might be misconfigured with app-01's value in docker-compose.yml.
+- Command or test: docker exec app-01 env | grep INSTANCE_ID; docker exec app-02 env | grep INSTANCE_ID
+- Actual output: Both containers returned INSTANCE_ID=app-01 before the fix.
+- Failed attempt and what changed your thinking: None — evidence was conclusive on first pass.
+- Root cause: app-02's INSTANCE_ID was mistakenly set to "app-01" in docker-compose.yml (copy-paste error), giving both containers the same identity.
+- Fix: Changed app-02's INSTANCE_ID value in docker-compose.yml from "app-01" to "app-02".
+- Retest evidence: After rebuilding, `docker exec app-01 env | grep INSTANCE_ID` returns app-01, and `docker exec app-02 env | grep INSTANCE_ID` returns app-02 — each container now has its own distinct identity.
+- Related commit: will be added after commit
 - Remaining uncertainty: None.
