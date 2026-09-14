@@ -183,3 +183,15 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: After removing the ports entries and recreating containers, `docker compose -p barq-assessment ps -a` shows postgres as "5432/tcp" and redis as "6379/tcp" with no host-port binding prefix — matching the pattern of already-isolated services like app-01/app-02, confirming no host exposure.
 - Related commit: 7190abc
 - Remaining uncertainty: None regarding this fix. Note for security_review.md: relying on "curl failed" as isolation evidence was a methodological mistake — the correct evidence is the absence of a `ports:` line in the config itself, verified by reading the raw file, not just testing connectivity from one specific environment.
+
+## Entry 15 / 2026-09-14 / [date -u] UTC
+- Symptom: After a full `down --volumes` + `up -d` + `./restore.sh`, GET /records still showed only the original 2 seed records — the backed-up record (id: 6) did not come back.
+- Hypothesis: The plain pg_dump output might conflict with the schema/seed data that init.sql recreates automatically on a fresh container start.
+- Command or test: Ran ./restore.sh and observed its output directly.
+- Actual output: psql errors during restore: "relation \"records\" already exists", "duplicate key value violates unique constraint \"records_pkey\"" (on id=1), and the COPY for the new data appears to have been rolled back as a result — GET /records confirmed only ids 1,2 present after restore.
+- Failed attempt and what changed your thinking: First backup.sh used plain `pg_dump` with no --clean flag, producing a dump that assumes an empty database. Since init.sql pre-populates the schema and seed rows on every fresh start, the restore collided with existing objects. Switched to `pg_dump --clean --if-exists` so the dump includes DROP statements before recreating.
+- Root cause: Backup was taken without --clean/--if-exists, so restoring onto a freshly-initialized database (which already has the schema+seed data from init.sql) caused conflicts that aborted part of the restore.
+- Fix: Added --clean --if-exists flags to the pg_dump command in backup.sh.
+- Retest evidence: Repeated the full cycle with the fixed backup.sh: created record id 7, backed up, ran `down --volumes` (full wipe) then `up -d`, then `./restore.sh backup_20260914_081317.sql`. Restore output showed "DROP TABLE" followed by "CREATE TABLE" and "COPY 3" (all three rows copied cleanly, no conflicts). GET /records confirmed all three records (1, 2, 7) present.
+- Related commit: (after commit)
+- Remaining uncertainty: None.
