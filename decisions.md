@@ -27,5 +27,5 @@ storage and any other meaningful choices.
 - Why: No limits meant a single runaway container could exhaust host resources and affect sibling services.
 - Alternative: Leave unlimited (simpler but riskier); much higher limits (safer but wasteful for this app's actual footprint).
 - Trade-off: 256MB/0.5 CPU is generous for this lightweight Flask app while still providing a hard ceiling.
-- Evidence / commit: (after commit) — verified via `docker inspect app-01 --format 'Memory={{.HostConfig.Memory}} CPUs={{.HostConfig.NanoCpus}}'` returning Memory=268435456, CPUs=500000000.
+- Evidence / commit: f2991ba — verified via `docker inspect app-01 --format 'Memory={{.HostConfig.Memory}} CPUs={{.HostConfig.NanoCpus}}'` returning Memory=268435456, CPUs=500000000.
 - Production improvement: Real limits should be based on measured load/profiling, not estimation.
