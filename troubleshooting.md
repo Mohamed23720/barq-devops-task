@@ -268,3 +268,31 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 * Related commit: 1f48aeb
 
 * Remaining uncertainty: The host command `python3 -m app.server` still fails because the host Python environment does not have project dependencies such as `psycopg` installed. This does not affect the containerized deployment because dependencies are installed in the Docker image.
+
+## Entry 19 / 2026-09-14 / ~17:58 UTC
+
+* Symptom: N/A — this was a proactive infrastructure reliability review, not an observed runtime failure. PostgreSQL, Redis, and Nginx did not have explicit restart policies or resource limits configured.
+
+* Hypothesis: Infrastructure services should have explicit restart policies and bounded CPU/memory resources so they recover automatically from unexpected exits and cannot consume unbounded host resources.
+
+* Command or test: Reviewed `docker-compose.yml`, then ran `docker compose config -q`, `docker compose up -d --force-recreate`, `docker compose ps`, and inspected the running containers with:
+`docker inspect postgres --format 'restart={{.HostConfig.RestartPolicy.Name}} memory={{.HostConfig.Memory}} nano_cpus={{.HostConfig.NanoCpus}}'`
+and equivalent commands for `redis` and `nginx`.
+
+* Actual output: Before the fix, PostgreSQL, Redis, and Nginx did not have explicit restart/resource limits. After the fix, Docker reported:
+PostgreSQL: `restart=unless-stopped`, `memory=536870912`, `nano_cpus=750000000`;
+Redis: `restart=unless-stopped`, `memory=134217728`, `nano_cpus=250000000`;
+Nginx: `restart=unless-stopped`, `memory=134217728`, `nano_cpus=250000000`.
+`docker compose config -q` completed successfully with no output, and all services reached `healthy`/running status.
+
+* Failed attempt and what changed your thinking: None — this was identified during proactive configuration review, and the required settings were applied directly.
+
+* Root cause: The infrastructure services relied on Docker's default restart behavior and had no explicit CPU or memory bounds, leaving service recovery and resource consumption less controlled than required for a production-style Compose deployment.
+
+* Fix: Added `restart: unless-stopped` to PostgreSQL, Redis, and Nginx. Added explicit `mem_limit` and `cpus` values: PostgreSQL `512m` / `0.75`, Redis `128m` / `0.25`, and Nginx `128m` / `0.25`.
+
+* Retest evidence: `docker compose config -q` passed. After `docker compose up -d --force-recreate`, `docker compose ps` showed all services running and healthy. `docker inspect` confirmed the configured restart policies and CPU/memory limits for all three infrastructure services.
+
+* Related commit: [AFTER COMMIT]
+
+* Remaining uncertainty: None regarding the configured restart policies and resource limits.
