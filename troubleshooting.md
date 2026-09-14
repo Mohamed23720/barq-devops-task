@@ -193,5 +193,5 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Root cause: Backup was taken without --clean/--if-exists, so restoring onto a freshly-initialized database (which already has the schema+seed data from init.sql) caused conflicts that aborted part of the restore.
 - Fix: Added --clean --if-exists flags to the pg_dump command in backup.sh.
 - Retest evidence: Repeated the full cycle with the fixed backup.sh: created record id 7, backed up, ran `down --volumes` (full wipe) then `up -d`, then `./restore.sh backup_20260914_081317.sql`. Restore output showed "DROP TABLE" followed by "CREATE TABLE" and "COPY 3" (all three rows copied cleanly, no conflicts). GET /records confirmed all three records (1, 2, 7) present.
-- Related commit: (after commit)
+- Related commit: 5b8ad5c
 - Remaining uncertainty: None.
