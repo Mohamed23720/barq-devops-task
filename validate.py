@@ -4,8 +4,8 @@ import json
 import socket
 import sys
 import urllib.request
-
-BASE = "http://127.0.0.1:8080"
+import os
+BASE = f"http://127.0.0.1:{os.getenv('PUBLIC_PORT', '8080')}"
 FAILURES = []
 
 

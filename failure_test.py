@@ -5,8 +5,8 @@ import subprocess
 import sys
 import time
 import urllib.request
-
-BASE = "http://127.0.0.1:8080"
+import os
+BASE = f"http://127.0.0.1:{os.getenv('PUBLIC_PORT', '8080')}"
 PROJECT = "barq-assessment"
 
 
