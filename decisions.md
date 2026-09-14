@@ -21,3 +21,11 @@ storage and any other meaningful choices.
 - Evidence / commit: (after commit)
 - Production improvement: In a real production system, this would be paired with a crash-loop backoff/alerting mechanism, since Docker Compose's restart policy alone has no limit on retry attempts.
 - Note on live behavior: The restart policy is correctly configured (`unless-stopped`, confirmed via `docker inspect .HostConfig.RestartPolicy`) and would trigger correctly on standard Docker Engine hosts (e.g., the GitHub Actions Linux runner used in CI). However, on this specific development machine (Docker Desktop + WSL2 backend), `docker kill` on a container did not trigger an automatic restart in manual testing — confirmed via `docker events` showing no subsequent "start" event. This appears to be a known class of Docker Desktop/WSL2 backend quirk with restart supervision, not a configuration defect. Documented here for transparency; the configuration itself is correct and will be demonstrated/relied upon via `docker compose start` in the failure_test.py recovery step instead of relying on automatic restart during local demos.
+
+## Decision 2
+- Choice: Added mem_limit: 256m and cpus: 0.5 to each app container.
+- Why: No limits meant a single runaway container could exhaust host resources and affect sibling services.
+- Alternative: Leave unlimited (simpler but riskier); much higher limits (safer but wasteful for this app's actual footprint).
+- Trade-off: 256MB/0.5 CPU is generous for this lightweight Flask app while still providing a hard ceiling.
+- Evidence / commit: (after commit) — verified via `docker inspect app-01 --format 'Memory={{.HostConfig.Memory}} CPUs={{.HostConfig.NanoCpus}}'` returning Memory=268435456, CPUs=500000000.
+- Production improvement: Real limits should be based on measured load/profiling, not estimation.

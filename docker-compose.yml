@@ -2,7 +2,9 @@ name: barq-assessment
 x-app: &app
   build: .
   init: true
-  restart: unless-stopped
+  restart: unless-stopped 
+  mem_limit: 256m
+  cpus: 0.5
   env_file: ./config/app.env
   environment: &app-env
     APP_HOST: "0.0.0.0"  #fixed : changed from "127.0.0.1" to "0.0.0.0"
