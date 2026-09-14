@@ -195,3 +195,76 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Retest evidence: Repeated the full cycle with the fixed backup.sh: created record id 7, backed up, ran `down --volumes` (full wipe) then `up -d`, then `./restore.sh backup_20260914_081317.sql`. Restore output showed "DROP TABLE" followed by "CREATE TABLE" and "COPY 3" (all three rows copied cleanly, no conflicts). GET /records confirmed all three records (1, 2, 7) present.
 - Related commit: 5b8ad5c
 - Remaining uncertainty: None.
+
+## Entry 16 / 2026-09-14 / ~15:20 UTC
+
+* Symptom: N/A — this was a proactive security review finding, not a runtime failure. The application startup log included the full `DATABASE_URL` value, which can contain database credentials.
+
+* Hypothesis: The `configuration_loaded` log event at application startup was unnecessarily exposing the complete database connection URL, including the PostgreSQL password, to container stdout logs.
+
+* Command or test: Reviewed `app/server.py` and inspected the startup log with `docker compose logs --tail=30 app-01`.
+
+* Actual output: Before the fix, `log_event("INFO", "configuration_loaded", database_url=os.getenv("DATABASE_URL", ""), redis_url=os.getenv("REDIS_URL", ""))` would log the complete database connection URL. After the fix and container recreation, the startup log showed `"database_configured": true` and `"redis_configured": true` without printing either connection URL or any credentials.
+
+* Failed attempt and what changed your thinking: None — the sensitive logging behavior was identified directly during code review, and the fix was applied without a failed runtime attempt.
+
+* Root cause: The application passed the full `DATABASE_URL` environment variable directly to structured logging. Since the URL contains the database password, credentials could be exposed through `docker compose logs` or any centralized log collection system.
+
+* Fix: Replaced the logging of full connection URLs with boolean configuration status fields:
+  `database_configured=bool(os.getenv("DATABASE_URL"))` and `redis_configured=bool(os.getenv("REDIS_URL"))`.
+
+* Retest evidence: `docker compose build app-01 app-02` completed successfully, both containers started successfully, and `docker compose logs --tail=30 app-01` showed `configuration_loaded` with only `"database_configured": true` and `"redis_configured": true`. Subsequent `/health` requests returned HTTP 200.
+
+* Related commit: Pending
+
+* Remaining uncertainty: None regarding credential exposure through this specific startup log. Other logs should continue to avoid printing environment variables or connection strings containing secrets.
+
+## Entry 17 / 2026-09-14 / ~15:35 UTC
+
+* Symptom: N/A — this was a proactive security and configuration review finding. The PostgreSQL password was hardcoded in both `docker-compose.yml` and `config/app.env`, meaning the secret was stored directly in project configuration files.
+
+* Hypothesis: The database password could be removed from tracked configuration files by storing it in a local `.env` file ignored by Git, while Docker Compose injects the value into PostgreSQL and constructs the application's `DATABASE_URL` at runtime.
+
+* Command or test: Reviewed the relevant configuration using `grep -nE 'PASSWORD|DATABASE_URL|REDIS_URL' docker-compose.yml`, `cat config/app.env`, and `cat .env.example`. Updated the configuration, then ran `docker compose config -q`, `docker compose up -d --force-recreate`, and `docker compose ps`.
+
+* Actual output: Before the fix, `docker-compose.yml` contained a hardcoded `POSTGRES_PASSWORD`, and `config/app.env` contained a full `DATABASE_URL` with the same password embedded in the connection string. After the fix, `.env` contains the local `POSTGRES_PASSWORD` and `PUBLIC_PORT`, `.env.example` provides safe placeholder values, `config/app.env` contains only the non-secret `REDIS_URL`, and Docker Compose constructs the application `DATABASE_URL` from `${POSTGRES_PASSWORD}` at runtime. `docker compose config -q` completed with no output, indicating valid Compose configuration.
+
+* Failed attempt and what changed your thinking: The initial idea was to place `${POSTGRES_PASSWORD}` directly inside `config/app.env`. Further review showed that relying on Compose variable interpolation inside an `env_file` was unnecessary and less clear for this setup. The configuration was instead simplified so Compose constructs `DATABASE_URL` directly in the application environment.
+
+* Root cause: A database credential was duplicated directly inside tracked project configuration files. This violated the principle of keeping secrets out of source-controlled Compose and application configuration.
+
+* Fix: Created a local `.env` file containing `POSTGRES_PASSWORD` and `PUBLIC_PORT`, relying on the existing `.gitignore` rules for `.env` and `.env.*`. Changed PostgreSQL configuration to use `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`. Removed `DATABASE_URL` containing credentials from `config/app.env` and constructed it in the Compose application environment using `${POSTGRES_PASSWORD}`. Updated `.env.example` with safe placeholder values.
+
+* Retest evidence: `docker compose config -q` completed successfully with no validation errors. After `docker compose up -d --force-recreate`, PostgreSQL and Redis became healthy, and both application containers initially started while health checks were running, then reached `healthy` status on the following `docker compose ps` check. Nginx remained running and exposed only `127.0.0.1:8080`.
+
+* Related commit: Pending
+
+* Remaining uncertainty: The current local `.env` contains the existing development password, which had previously been exposed in tracked configuration and logs. For a real deployment, the exposed password should be rotated and production secrets should be supplied through an appropriate secret-management mechanism rather than a local `.env` file.
+
+## Entry 18 / 2026-09-14 / ~16:15 UTC
+
+* Symptom: The application containers were running with the Flask development server, and startup logs displayed the warning: `This is a development server. Do not use it in a production deployment.` In addition, `gunicorn` was already listed in `requirements.txt` but was not being used.
+
+* Hypothesis: The application should use Gunicorn as its WSGI server in the container instead of starting Flask directly with `python -m app.server`.
+
+* Command or test: Added `app/wsgi.py` as a WSGI entry point that creates the Flask application using `create_app()`. Updated the Dockerfile command to start Gunicorn with two workers and two threads:
+  `gunicorn --bind 0.0.0.0:8080 --workers 2 --threads 2 app.wsgi:app`
+  Then rebuilt the application images and recreated `app-01` and `app-02`.
+
+* Actual output: Gunicorn started successfully and logged:
+  `Starting gunicorn 26.2.0`
+  `Listening at: http://0.0.0.0:8080`
+  `Using worker: gthread`
+  Both Gunicorn workers booted successfully.
+
+* Failed attempt and what changed your thinking: After the initial Gunicorn deployment, the logs showed `Control server error: [Errno 13] Permission denied: '/home/app'`. The application itself remained healthy, but the container user had been created with `--no-create-home`. The Dockerfile was updated to create a home directory for the non-root `app` user.
+
+* Root cause: The application Docker image used the Flask development server as its default command. After switching to Gunicorn, the non-root application user did not have a home directory, which caused Gunicorn's control socket setup to fail with a permission error.
+
+* Fix: Added `app/wsgi.py` exposing the Flask application as `app`. Changed the Dockerfile `CMD` from `python -m app.server` to Gunicorn. Updated the `useradd` command to use `--create-home` instead of `--no-create-home`, allowing Gunicorn to create its control socket under `/home/app/.gunicorn`.
+
+* Retest evidence: Rebuilt both application images and recreated both containers. `docker compose logs --tail=30 app-01` showed Gunicorn listening on `0.0.0.0:8080`, both workers booting successfully, and the control socket listening under `/home/app/.gunicorn/gunicorn.ctl`. No Flask development-server warning or permission-denied error appeared. Health-check requests returned HTTP 200.
+
+* Related commit: Pending
+
+* Remaining uncertainty: The host command `python3 -m app.server` still fails because the host Python environment does not have project dependencies such as `psycopg` installed. This does not affect the containerized deployment because dependencies are installed in the Docker image.
