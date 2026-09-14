@@ -215,7 +215,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 
 * Retest evidence: `docker compose build app-01 app-02` completed successfully, both containers started successfully, and `docker compose logs --tail=30 app-01` showed `configuration_loaded` with only `"database_configured": true` and `"redis_configured": true`. Subsequent `/health` requests returned HTTP 200.
 
-* Related commit: Pending
+* Related commit: 1f48aeb
 
 * Remaining uncertainty: None regarding credential exposure through this specific startup log. Other logs should continue to avoid printing environment variables or connection strings containing secrets.
 
@@ -237,7 +237,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 
 * Retest evidence: `docker compose config -q` completed successfully with no validation errors. After `docker compose up -d --force-recreate`, PostgreSQL and Redis became healthy, and both application containers initially started while health checks were running, then reached `healthy` status on the following `docker compose ps` check. Nginx remained running and exposed only `127.0.0.1:8080`.
 
-* Related commit: Pending
+* Related commit: 1f48aeb
 
 * Remaining uncertainty: The current local `.env` contains the existing development password, which had previously been exposed in tracked configuration and logs. For a real deployment, the exposed password should be rotated and production secrets should be supplied through an appropriate secret-management mechanism rather than a local `.env` file.
 
@@ -265,6 +265,6 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 
 * Retest evidence: Rebuilt both application images and recreated both containers. `docker compose logs --tail=30 app-01` showed Gunicorn listening on `0.0.0.0:8080`, both workers booting successfully, and the control socket listening under `/home/app/.gunicorn/gunicorn.ctl`. No Flask development-server warning or permission-denied error appeared. Health-check requests returned HTTP 200.
 
-* Related commit: Pending
+* Related commit: 1f48aeb
 
 * Remaining uncertainty: The host command `python3 -m app.server` still fails because the host Python environment does not have project dependencies such as `psycopg` installed. This does not affect the containerized deployment because dependencies are installed in the Docker image.
