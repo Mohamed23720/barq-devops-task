@@ -184,7 +184,7 @@ Do not fabricate a failed attempt just to fill the template. Record actual attem
 - Related commit: 7190abc
 - Remaining uncertainty: None regarding this fix. Note for security_review.md: relying on "curl failed" as isolation evidence was a methodological mistake — the correct evidence is the absence of a `ports:` line in the config itself, verified by reading the raw file, not just testing connectivity from one specific environment.
 
-## Entry 15 / 2026-09-14 / [date -u] UTC
+## Entry 15 / 2026-09-14 / 08:16 UTC
 - Symptom: After a full `down --volumes` + `up -d` + `./restore.sh`, GET /records still showed only the original 2 seed records — the backed-up record (id: 6) did not come back.
 - Hypothesis: The plain pg_dump output might conflict with the schema/seed data that init.sql recreates automatically on a fresh container start.
 - Command or test: Ran ./restore.sh and observed its output directly.
