@@ -1,0 +1,38 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare env file
+        run: cp .env.example .env
+
+      - name: Build and start environment
+        run: docker compose -p barq-assessment up --build -d
+
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8080/ready; then
+              echo "ready"
+              break
+            fi
+            sleep 2
+            if [ "$i" -eq 30 ]; then
+              echo "timed out waiting for readiness"
+              docker compose -p barq-assessment logs --no-color
+              exit 1
+            fi
+          done
+
+      - name: Run validation
+        run: python3 validate.py
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -p barq-assessment logs --no-color
