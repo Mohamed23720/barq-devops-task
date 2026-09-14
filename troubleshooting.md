@@ -293,6 +293,6 @@ Nginx: `restart=unless-stopped`, `memory=134217728`, `nano_cpus=250000000`.
 
 * Retest evidence: `docker compose config -q` passed. After `docker compose up -d --force-recreate`, `docker compose ps` showed all services running and healthy. `docker inspect` confirmed the configured restart policies and CPU/memory limits for all three infrastructure services.
 
-* Related commit: [AFTER COMMIT]
+* Related commit: daf4be4
 
 * Remaining uncertainty: None regarding the configured restart policies and resource limits.
